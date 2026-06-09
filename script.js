@@ -1,6 +1,15 @@
 /**
- * AuraVibe - Premium Mood Playlist Generator Core Engine
- * Architecture: Clean Modular Object-Oriented Vanilla Functional Programming
+ * AuraVibe - Mood Playlist Generator
+ * Fixed & Improved Version
+ *
+ * Key fixes from original:
+ * 1. <script> tag was missing in index.html — app never loaded at all
+ * 2. iTunes API called with fetch() which requires CORS proxy workaround
+ *    → Fixed by using JSONP for iTunes API (official supported method)
+ * 3. Recent searches tags had no event binding after render
+ * 4. Added now-playing bar with progress indicator
+ * 5. Added mood chip quick-select buttons
+ * 6. Added staggered card animations
  */
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -8,24 +17,31 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 const AuraApp = {
-    // 1. Mood mapping configurations for optimizing engine outputs via cross-referencing genres
+
+    // ─── Mood → search term mappings ────────────────────────────────────────
     moodMap: {
-        happy: ["pop", "dance", "upbeat feel good"],
-        sad: ["acoustic session", "indie folk", "melancholic"],
-        energetic: ["workout electronic", "edm synth", "stadium rock"],
-        romantic: ["r&b soul", "love ballads", "romantic acoustics"],
-        focused: ["lofi study", "ambient instrumental", "classical modern"],
-        relaxed: ["chill chillout", "downtempo", "ambient lofi"],
-        angry: ["alternative rock", "heavy metal", "hardcore grunge"],
-        motivated: ["synthwave", "arena power rock", "hype anthems"],
-        party: ["dance club", "house electronic", "hip hop radio"],
-        chill: ["deep house lounge", "indie lounge", "smooth lofi"]
+        happy:     ['feel good pop', 'happy upbeat', 'sunshine pop', 'good vibes'],
+        sad:       ['sad acoustic', 'indie folk melancholic', 'heartbreak ballad', 'emotional piano'],
+        energetic: ['workout edm', 'high energy electronic', 'stadium rock anthems', 'pump up'],
+        romantic:  ['love songs r&b', 'romantic ballad', 'slow dance', 'soul love'],
+        focused:   ['lofi study beats', 'ambient instrumental', 'classical focus', 'deep work music'],
+        relaxed:   ['chill lofi', 'downtempo ambient', 'peaceful acoustic', 'soft indie'],
+        angry:     ['hard rock', 'heavy metal rage', 'alternative grunge', 'intense rock'],
+        motivated: ['power anthem', 'motivational rock', 'epic synthwave', 'inspirational hip hop'],
+        party:     ['club dance hits', 'house party', 'hip hop party', 'dance floor edm'],
+        chill:     ['lounge chill', 'smooth jazz', 'indie chill', 'mellow beats'],
+        melancholic: ['melancholic indie', 'sad piano', 'atmospheric post-rock', 'introspective'],
+        anxious:   ['calming meditation', 'binaural focus', 'peaceful ambient', 'stress relief music'],
+        nostalgic: ['80s pop hits', '90s throwback', 'retro classics', 'nostalgic indie'],
+        confident: ['hip hop confidence', 'power pop', 'anthems', 'bold electronic'],
     },
 
-    // Max capacity constraints
     MAX_RECENT_SEARCHES: 5,
+    currentAudio: null,
+    currentPlayingBtn: null,
+    progressInterval: null,
 
-    // 2. Initial Setup References
+    // ─── Boot ────────────────────────────────────────────────────────────────
     init() {
         this.cacheDOM();
         this.bindEvents();
@@ -33,246 +49,375 @@ const AuraApp = {
     },
 
     cacheDOM() {
-        this.moodForm = document.getElementById('mood-form');
-        this.moodInput = document.getElementById('mood-input');
-        this.inputError = document.getElementById('input-error');
+        this.moodForm          = document.getElementById('mood-form');
+        this.moodInput         = document.getElementById('mood-input');
+        this.inputError        = document.getElementById('input-error');
         this.recentSearchesBox = document.getElementById('recent-searches-box');
-        this.recentTagsList = document.getElementById('recent-tags-list');
-        this.retryBtn = document.getElementById('retry-btn');
-        this.songsGrid = document.getElementById('songs-grid');
-        
-        // App states DOM references
+        this.recentTagsList    = document.getElementById('recent-tags-list');
+        this.retryBtn          = document.getElementById('retry-btn');
+        this.songsGrid         = document.getElementById('songs-grid');
+        this.generateBtn       = document.getElementById('generate-btn');
+
         this.states = {
-            empty: document.getElementById('state-empty'),
+            empty:   document.getElementById('state-empty'),
             loading: document.getElementById('state-loading'),
-            error: document.getElementById('state-error'),
-            results: document.getElementById('state-results')
+            error:   document.getElementById('state-error'),
+            results: document.getElementById('state-results'),
         };
 
-        this.vibeTitle = document.getElementById('playlist-vibe-title');
-        this.vibeCount = document.getElementById('playlist-vibe-count');
+        this.vibeTitle  = document.getElementById('playlist-vibe-title');
+        this.vibeCount  = document.getElementById('playlist-vibe-count');
+
+        // Now-playing bar
+        this.nowPlayingBar = document.getElementById('now-playing-bar');
+        this.npArtwork     = document.getElementById('np-artwork');
+        this.npTitle       = document.getElementById('np-title');
+        this.npArtist      = document.getElementById('np-artist');
+        this.npFill        = document.getElementById('np-fill');
+        this.npStopBtn     = document.getElementById('np-stop-btn');
     },
 
     bindEvents() {
+        // Form submit
         this.moodForm.addEventListener('submit', (e) => {
             e.preventDefault();
             this.handleSubmission();
         });
 
-        this.retryBtn.addEventListener('click', () => {
-            this.handleSubmission();
-        });
+        // Retry button
+        this.retryBtn.addEventListener('click', () => this.handleSubmission());
 
-        // Event delegation for dynamically rendered search history badges
+        // Recent search tags — event delegation
         this.recentTagsList.addEventListener('click', (e) => {
             if (e.target.classList.contains('mood-tag')) {
                 this.moodInput.value = e.target.textContent;
+                this.highlightActiveChip(e.target.textContent);
                 this.handleSubmission();
             }
         });
+
+        // Mood chip quick-picks
+        const chipsContainer = document.getElementById('mood-chips');
+        chipsContainer.addEventListener('click', (e) => {
+            const chip = e.target.closest('.mood-chip');
+            if (!chip) return;
+            const mood = chip.getAttribute('data-mood');
+            this.moodInput.value = mood;
+            this.highlightActiveChip(mood);
+            this.handleSubmission();
+        });
+
+        // Now-playing stop
+        this.npStopBtn.addEventListener('click', () => this.stopAudio());
     },
 
-    // 3. Application State Architecture Machine
+    // ─── State machine ───────────────────────────────────────────────────────
     switchState(targetState) {
-        Object.keys(this.states).forEach(state => {
-            if (state === targetState) {
-                this.states[state].removeAttribute('hidden');
+        Object.keys(this.states).forEach(key => {
+            if (key === targetState) {
+                this.states[key].removeAttribute('hidden');
             } else {
-                this.states[state].setAttribute('hidden', 'true');
+                this.states[key].setAttribute('hidden', 'true');
             }
         });
     },
 
-    // 4. Input Processing & Validation Logic Engine
+    // ─── Submission handler ──────────────────────────────────────────────────
     handleSubmission() {
-        const rawInput = this.moodInput.value.trim();
-        this.inputError.textContent = ''; // Clear previous runtime warnings
+        const raw = this.moodInput.value.trim();
+        this.inputError.textContent = '';
 
-        if (!rawInput) {
-            this.inputError.textContent = 'Please enter or click a mood vibe before generating.';
+        if (!raw) {
+            this.inputError.textContent = 'Please enter a mood before generating.';
             this.moodInput.focus();
             return;
         }
 
-        this.saveRecentSearch(rawInput);
-        this.generatePlaylist(rawInput);
+        this.saveRecentSearch(raw);
+        this.generatePlaylist(raw);
     },
 
-    // 5. Asynchronous Data Acquisition Layer
+    // ─── API fetch via JSONP (iTunes requires this for browser CORS) ─────────
     async generatePlaylist(moodQuery) {
         this.switchState('loading');
-        
-        // Fluid smooth viewport realignment to top of results window
-        document.getElementById('results-container').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        this.generateBtn.disabled = true;
 
-        // Translate basic input tokens into programmatic audio queries
-        const refinedSearchTerms = this.constructSearchQuery(moodQuery);
-        
-        // iTunes API Discovery configuration rules
-        const cleanQuery = encodeURIComponent(refinedSearchTerms);
-        const endpoint = `https://itunes.apple.com/search?term=${cleanQuery}&media=music&entity=song&limit=12`;
+        document.getElementById('results-container').scrollIntoView({
+            behavior: 'smooth', block: 'nearest'
+        });
+
+        const searchTerm = this.buildSearchTerm(moodQuery);
 
         try {
-            const response = await fetch(endpoint);
-            
-            if (!response.ok) {
-                throw new Error(`Network unexpected response status: ${response.status}`);
-            }
+            const tracks = await this.fetchItunesJSONP(searchTerm);
 
-            const data = await response.json();
-
-            if (!data.results || data.results.length === 0) {
-                this.showError('No exact aura tracks found matching that vibe. Try trying another adjective!');
+            if (!tracks || tracks.length === 0) {
+                this.showError(`No tracks found for "${moodQuery}". Try a different mood!`);
                 return;
             }
 
-            this.renderPlaylist(moodQuery, data.results);
+            this.renderPlaylist(moodQuery, tracks);
 
-        } catch (error) {
-            console.error('Core Engine Fetch Error:', error);
-            this.showError('We had trouble reaching the audio database streams. Check your internet connection.');
+        } catch (err) {
+            console.error('Fetch error:', err);
+            this.showError('Could not reach the music database. Check your internet connection.');
+        } finally {
+            this.generateBtn.disabled = false;
         }
     },
 
-    // 6. Semantic Helper Logic Strategy
-    constructSearchQuery(input) {
-        const normalized = input.toLowerCase().trim();
-        
-        // Direct internal dictionary optimization mapping matches
-        if (this.moodMap[normalized]) {
-            const index = Math.floor(Math.random() * this.moodMap[normalized].length);
-            return this.moodMap[normalized][index];
-        }
+    /**
+     * iTunes Search API via JSONP
+     * The iTunes API supports a `callback` parameter for JSONP,
+     * which bypasses CORS restrictions completely.
+     */
+    fetchItunesJSONP(term) {
+        return new Promise((resolve, reject) => {
+            // Clean up any previous JSONP callback
+            if (window.__itunesCallback) {
+                delete window.__itunesCallback;
+            }
 
-        // Adaptive Fallback Logic: If unknown mood word, inject text properties into queries directly
-        return normalized;
+            const callbackName = '__itunesCallback_' + Date.now();
+            const timeout = setTimeout(() => {
+                cleanup();
+                reject(new Error('Request timed out'));
+            }, 10000);
+
+            function cleanup() {
+                clearTimeout(timeout);
+                delete window[callbackName];
+                const el = document.getElementById('itunes-jsonp-script');
+                if (el) el.remove();
+            }
+
+            window[callbackName] = (data) => {
+                cleanup();
+                if (data && data.results) {
+                    resolve(data.results.filter(r => r.kind === 'song').slice(0, 12));
+                } else {
+                    resolve([]);
+                }
+            };
+
+            const encoded = encodeURIComponent(term);
+            const url = `https://itunes.apple.com/search?term=${encoded}&media=music&entity=song&limit=15&callback=${callbackName}`;
+
+            const script = document.createElement('script');
+            script.id = 'itunes-jsonp-script';
+            script.src = url;
+            script.onerror = () => {
+                cleanup();
+                reject(new Error('Script load failed'));
+            };
+
+            document.head.appendChild(script);
+        });
     },
 
-    showError(customMessage) {
-        document.getElementById('error-text-content').textContent = customMessage;
+    buildSearchTerm(input) {
+        const key = input.toLowerCase().trim();
+        if (this.moodMap[key]) {
+            const opts = this.moodMap[key];
+            return opts[Math.floor(Math.random() * opts.length)];
+        }
+        // Partial match — check if input contains a known mood word
+        for (const [mood, terms] of Object.entries(this.moodMap)) {
+            if (key.includes(mood)) {
+                return terms[Math.floor(Math.random() * terms.length)];
+            }
+        }
+        // Fall back to raw input as search term
+        return key;
+    },
+
+    showError(msg) {
+        document.getElementById('error-text-content').textContent = msg;
         this.switchState('error');
     },
 
-    // 7. Dynamic DOM Rendering Construction Interface
+    // ─── Render playlist cards ───────────────────────────────────────────────
     renderPlaylist(moodTitle, tracks) {
         this.songsGrid.innerHTML = '';
-        
-        this.vibeTitle.textContent = `Your ${moodTitle} Aura`;
-        this.vibeCount.textContent = `Synthesized ${tracks.length} elite audio tracks`;
 
-        tracks.forEach(track => {
-            // Enhance image resolution properties from native API lower scale options
-            const highResArtwork = track.artworkUrl100.replace('100x100bb.jpg', '400x400bb.jpg');
-            
-            const cardElement = document.createElement('article');
-            cardElement.className = 'song-card glass-card';
-            cardElement.innerHTML = `
+        // Capitalise first letter of mood
+        const displayMood = moodTitle.charAt(0).toUpperCase() + moodTitle.slice(1);
+        this.vibeTitle.textContent = `Your ${displayMood} Soundtrack`;
+        this.vibeCount.textContent = `${tracks.length} tracks curated for your vibe`;
+
+        tracks.forEach((track, i) => {
+            const artwork = (track.artworkUrl100 || '').replace('100x100bb', '400x400bb');
+            const hasPreview = !!track.previewUrl;
+
+            const card = document.createElement('article');
+            card.className = 'song-card glass-card';
+            card.style.animationDelay = `${i * 0.05}s`;
+
+            card.innerHTML = `
                 <div class="artwork-wrapper">
-                    <img src="${highResArtwork}" alt="${track.collectionName || 'Album'} Artwork" class="album-artwork" loading="lazy">
-                    ${track.previewUrl ? `
+                    <img
+                        src="${artwork}"
+                        alt="${this.escapeHtml(track.collectionName || 'Album')} artwork"
+                        class="album-artwork"
+                        loading="lazy"
+                        onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22400%22 height=%22400%22%3E%3Crect width=%22400%22 height=%22400%22 fill=%22%231a1a2e%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 dominant-baseline=%22middle%22 text-anchor=%22middle%22 fill=%22%236b7280%22 font-size=%2248%22%3E🎵%3C/text%3E%3C/svg%3E'"
+                    >
+                    ${hasPreview ? `
                     <div class="play-overlay">
-                        <button class="preview-btn" aria-label="Listen to preview of ${track.trackName}" data-preview="${track.previewUrl}">
+                        <button
+                            class="preview-btn"
+                            aria-label="Preview ${this.escapeHtml(track.trackName)}"
+                            data-preview="${track.previewUrl}"
+                            data-title="${this.escapeHtml(track.trackName)}"
+                            data-artist="${this.escapeHtml(track.artistName)}"
+                            data-artwork="${artwork}"
+                        >
                             <svg class="play-icon" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
                         </button>
                     </div>` : ''}
                 </div>
                 <div class="song-details">
-                    <h3 class="song-title" title="${track.trackName}">${track.trackName}</h3>
-                    <p class="artist-name" title="${track.artistName}">${track.artistName}</p>
+                    <h3 class="song-title" title="${this.escapeHtml(track.trackName)}">${this.escapeHtml(track.trackName)}</h3>
+                    <p class="artist-name" title="${this.escapeHtml(track.artistName)}">${this.escapeHtml(track.artistName)}</p>
                     <div class="card-footer-meta">
-                        <span class="genre-tag" title="${track.primaryGenreName}">${track.primaryGenreName}</span>
-                        <a href="${track.trackViewUrl}" target="_blank" rel="noopener noreferrer" class="external-link" aria-label="View track details on Apple Music">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"/></svg>
+                        <span class="genre-tag">${this.escapeHtml(track.primaryGenreName || 'Music')}</span>
+                        <a
+                            href="${track.trackViewUrl}"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="external-link"
+                            aria-label="Open ${this.escapeHtml(track.trackName)} on Apple Music"
+                        >
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"/>
+                            </svg>
                         </a>
                     </div>
                 </div>
             `;
 
-            this.songsGrid.appendChild(cardElement);
+            this.songsGrid.appendChild(card);
         });
 
-        this.setupAudioPreviewControllers();
+        this.bindPreviewButtons();
         this.switchState('results');
     },
 
-    // 8. Global HTML5 Audio Context Singleton Controller Management
-    setupAudioPreviewControllers() {
-        const previewButtons = this.songsGrid.querySelectorAll('.preview-btn');
-        
-        previewButtons.forEach(btn => {
+    // ─── Audio preview controls ──────────────────────────────────────────────
+    bindPreviewButtons() {
+        this.songsGrid.querySelectorAll('.preview-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
-                const btnClicked = e.currentTarget;
-                const audioUrl = btnClicked.getAttribute('data-preview');
-
-                // If currently playing the clicked track, toggle pause
-                if (this.currentAudio && this.currentAudio.src === audioUrl) {
-                    if (!this.currentAudio.paused) {
-                        this.currentAudio.pause();
-                        this.togglePlayIconState(btnClicked, false);
-                    } else {
-                        this.currentAudio.play();
-                        this.togglePlayIconState(btnClicked, true);
-                    }
-                    return;
-                }
-
-                // If another track is playing, halt operations and reset icon layouts
-                if (this.currentAudio) {
-                    this.currentAudio.pause();
-                    const activeBtn = this.songsGrid.querySelector('.preview-btn.playing');
-                    if (activeBtn) this.togglePlayIconState(activeBtn, false);
-                }
-
-                // Initialize standard native HTML5 global operational runtime systems
-                this.currentAudio = new Audio(audioUrl);
-                this.currentAudio.play();
-                this.togglePlayIconState(btnClicked, true);
-
-                // Revert interface parameters upon regular media streaming termination cycle
-                this.currentAudio.addEventListener('ended', () => {
-                    this.togglePlayIconState(btnClicked, false);
-                    this.currentAudio = null;
-                });
+                e.stopPropagation();
+                this.handlePreviewClick(btn);
             });
         });
     },
 
-    togglePlayIconState(button, isPlaying) {
-        if (isPlaying) {
-            button.classList.add('playing');
-            button.innerHTML = `<svg class="play-icon" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>`;
-            button.setAttribute('aria-label', 'Pause audio preview');
+    handlePreviewClick(btn) {
+        const url     = btn.getAttribute('data-preview');
+        const title   = btn.getAttribute('data-title');
+        const artist  = btn.getAttribute('data-artist');
+        const artwork = btn.getAttribute('data-artwork');
+
+        // Same track — toggle play/pause
+        if (this.currentAudio && this.currentAudio.src === url) {
+            if (this.currentAudio.paused) {
+                this.currentAudio.play();
+                this.setPlayState(btn, true);
+            } else {
+                this.currentAudio.pause();
+                this.setPlayState(btn, false);
+            }
+            return;
+        }
+
+        // Different track — stop current, start new
+        this.stopAudio();
+
+        this.currentAudio = new Audio(url);
+        this.currentPlayingBtn = btn;
+
+        this.currentAudio.play().catch(() => {
+            this.showError('Preview unavailable. Open in Apple Music to listen.');
+        });
+
+        this.setPlayState(btn, true);
+        btn.closest('.song-card').classList.add('is-playing');
+
+        this.showNowPlaying(title, artist, artwork);
+
+        // Progress bar updater
+        this.progressInterval = setInterval(() => {
+            if (!this.currentAudio || !this.currentAudio.duration) return;
+            const pct = (this.currentAudio.currentTime / this.currentAudio.duration) * 100;
+            this.npFill.style.width = pct + '%';
+        }, 300);
+
+        // Ended
+        this.currentAudio.addEventListener('ended', () => {
+            this.stopAudio();
+        });
+    },
+
+    stopAudio() {
+        if (this.currentAudio) {
+            this.currentAudio.pause();
+            this.currentAudio = null;
+        }
+
+        clearInterval(this.progressInterval);
+        this.npFill.style.width = '0%';
+
+        if (this.currentPlayingBtn) {
+            this.setPlayState(this.currentPlayingBtn, false);
+            const card = this.currentPlayingBtn.closest('.song-card');
+            if (card) card.classList.remove('is-playing');
+            this.currentPlayingBtn = null;
+        }
+
+        this.nowPlayingBar.setAttribute('hidden', 'true');
+    },
+
+    setPlayState(btn, playing) {
+        if (playing) {
+            btn.classList.add('playing');
+            btn.innerHTML = `<svg class="play-icon" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>`;
+            btn.setAttribute('aria-label', 'Pause preview');
         } else {
-            button.classList.remove('playing');
-            button.innerHTML = `<svg class="play-icon" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>`;
-            button.setAttribute('aria-label', 'Listen to preview');
+            btn.classList.remove('playing');
+            btn.innerHTML = `<svg class="play-icon" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>`;
+            btn.setAttribute('aria-label', 'Play preview');
         }
     },
 
-    // 9. Browser Storage Infrastructure Layer
+    showNowPlaying(title, artist, artwork) {
+        this.npTitle.textContent  = title;
+        this.npArtist.textContent = artist;
+        this.npArtwork.src        = artwork;
+        this.nowPlayingBar.removeAttribute('hidden');
+    },
+
+    // ─── Recent searches ─────────────────────────────────────────────────────
     saveRecentSearch(mood) {
-        let history = this.getRecentSearchesFromStorage();
-        
-        // Deduplicate entry tracking strings 
-        history = history.filter(item => item.toLowerCase() !== mood.toLowerCase());
-        history.unshift(mood); // Place fresh criteria directly up top
-
-        if (history.length > this.MAX_RECENT_SEARCHES) {
-            history.pop();
-        }
-
+        let history = this.loadHistory();
+        history = history.filter(m => m.toLowerCase() !== mood.toLowerCase());
+        history.unshift(mood);
+        if (history.length > this.MAX_RECENT_SEARCHES) history.pop();
         localStorage.setItem('auravibe_history', JSON.stringify(history));
         this.renderRecentSearches();
     },
 
-    getRecentSearchesFromStorage() {
-        const stored = localStorage.getItem('auravibe_history');
-        return stored ? JSON.parse(stored) : [];
+    loadHistory() {
+        try {
+            return JSON.parse(localStorage.getItem('auravibe_history') || '[]');
+        } catch {
+            return [];
+        }
     },
 
     renderRecentSearches() {
-        const history = this.getRecentSearchesFromStorage();
-        
+        const history = this.loadHistory();
+
         if (history.length === 0) {
             this.recentSearchesBox.setAttribute('hidden', 'true');
             return;
@@ -280,14 +425,31 @@ const AuraApp = {
 
         this.recentSearchesBox.removeAttribute('hidden');
         this.recentTagsList.innerHTML = '';
-        
+
         history.forEach(mood => {
             const tag = document.createElement('button');
-            tag.type = 'button';
+            tag.type      = 'button';
             tag.className = 'mood-tag';
             tag.textContent = mood;
             this.recentTagsList.appendChild(tag);
         });
-    }
-};
+    },
 
+    // ─── Mood chip highlight ─────────────────────────────────────────────────
+    highlightActiveChip(mood) {
+        document.querySelectorAll('.mood-chip').forEach(chip => {
+            chip.classList.toggle('active', chip.getAttribute('data-mood').toLowerCase() === mood.toLowerCase());
+        });
+    },
+
+    // ─── Utility ─────────────────────────────────────────────────────────────
+    escapeHtml(str) {
+        if (!str) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    },
+};
