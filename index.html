@@ -21,21 +21,21 @@
                 <span class="logo-icon">⚡</span>
                 <h1 class="app-title">Aura<span>Vibe</span></h1>
             </div>
-            <p class="app-subtitle">Alchemize your current mood into a perfectly curated audio experience.</p>
+            <p class="app-subtitle">Turn your mood into a perfectly curated soundtrack.</p>
         </header>
 
         <main class="main-content">
             <section class="control-panel glass-card" aria-labelledby="search-heading">
                 <h2 id="search-heading" class="visually-hidden">Mood Selector</h2>
-                
+
                 <form id="mood-form" novalidate>
                     <div class="input-group">
                         <label for="mood-input" class="input-label">How are you feeling right now?</label>
                         <div class="input-wrapper">
-                            <input 
-                                type="text" 
-                                id="mood-input" 
-                                placeholder="e.g., Happy, Focused, Relaxed, Melancholic..." 
+                            <input
+                                type="text"
+                                id="mood-input"
+                                placeholder="e.g., Happy, Focused, Relaxed, Melancholic..."
                                 autocomplete="off"
                                 required
                                 aria-required="true"
@@ -45,31 +45,52 @@
                                 <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
                             </button>
                         </div>
-                        <div id="input-error" class="error-message" aria-live="polite"></div>
+                        <div id="input-error" class="error-message" role="alert" aria-live="polite"></div>
                     </div>
                 </form>
 
+                <!-- Quick Mood Chips -->
+                <div class="mood-chips-container">
+                    <span class="chips-label">Quick pick:</span>
+                    <div class="mood-chips" id="mood-chips">
+                        <button type="button" class="mood-chip" data-mood="Happy">😄 Happy</button>
+                        <button type="button" class="mood-chip" data-mood="Sad">😢 Sad</button>
+                        <button type="button" class="mood-chip" data-mood="Energetic">⚡ Energetic</button>
+                        <button type="button" class="mood-chip" data-mood="Romantic">💕 Romantic</button>
+                        <button type="button" class="mood-chip" data-mood="Focused">🎯 Focused</button>
+                        <button type="button" class="mood-chip" data-mood="Relaxed">🌊 Relaxed</button>
+                        <button type="button" class="mood-chip" data-mood="Angry">🔥 Angry</button>
+                        <button type="button" class="mood-chip" data-mood="Party">🎉 Party</button>
+                        <button type="button" class="mood-chip" data-mood="Chill">❄️ Chill</button>
+                        <button type="button" class="mood-chip" data-mood="Motivated">💪 Motivated</button>
+                    </div>
+                </div>
+
+                <!-- Recent Searches -->
                 <div class="recent-searches-container" id="recent-searches-box" hidden>
-                    <span class="recent-label">Recent Moods:</span>
-                    <div class="recent-tags" id="recent-tags-list">
-                        </div>
+                    <span class="recent-label">Recent:</span>
+                    <div class="recent-tags" id="recent-tags-list"></div>
                 </div>
             </section>
 
             <section class="results-section" aria-live="polite" id="results-container">
-                
+
+                <!-- Empty State -->
                 <div class="empty-state glass-card" id="state-empty">
                     <div class="empty-illustration">
                         <div class="waves">
                             <div class="wave wave-1"></div>
                             <div class="wave wave-2"></div>
                             <div class="wave wave-3"></div>
+                            <div class="wave wave-4"></div>
+                            <div class="wave wave-5"></div>
                         </div>
                     </div>
                     <h3>Your vibe is waiting</h3>
-                    <p>Enter a mood or keywords above to synthesize a personalized soundtrack matching your aura.</p>
+                    <p>Pick a mood above or type your own to generate a personalized soundtrack.</p>
                 </div>
 
+                <!-- Loading Skeleton -->
                 <div class="skeleton-state" id="state-loading" hidden>
                     <div class="playlist-header-skeleton">
                         <div class="skeleton skeleton-title"></div>
@@ -91,35 +112,58 @@
                             <div class="skeleton skeleton-text short"></div>
                             <div class="skeleton skeleton-text long"></div>
                         </div>
+                        <div class="song-card-skeleton glass-card">
+                            <div class="skeleton skeleton-img"></div>
+                            <div class="skeleton skeleton-text short"></div>
+                            <div class="skeleton skeleton-text long"></div>
+                        </div>
                     </div>
                 </div>
 
+                <!-- Error State -->
                 <div class="error-state glass-card" id="state-error" hidden>
                     <div class="error-icon">⚠️</div>
                     <h3>Failed to Sync Vibe</h3>
-                    <p id="error-text-content">An unexpected error occurred. Please verify your connection and try again.</p>
+                    <p id="error-text-content">An unexpected error occurred. Check your connection and try again.</p>
                     <button class="btn btn-secondary" id="retry-btn">Try Again</button>
                 </div>
 
+                <!-- Results -->
                 <div class="playlist-results" id="state-results" hidden>
                     <div class="playlist-meta">
                         <div>
-                            <h2 class="playlist-title" id="playlist-vibe-title">Your Focused Soundtrack</h2>
-                            <p class="playlist-count" id="playlist-vibe-count">Loaded 10 curated tracks</p>
+                            <h2 class="playlist-title" id="playlist-vibe-title">Your Soundtrack</h2>
+                            <p class="playlist-count" id="playlist-vibe-count">Loading tracks...</p>
                         </div>
                     </div>
-                    <div class="grid-layout" id="songs-grid">
-                        </div>
+                    <div class="grid-layout" id="songs-grid"></div>
                 </div>
 
             </section>
         </main>
 
         <footer class="app-footer">
-            <p>&copy; 2026 AuraVibe. Engineered with Vanilla JS & Semantic UX.</p>
-            <p class="api-attribution">Powered by the open iTunes Discovery Engine.</p>
+            <p>&copy; 2026 AuraVibe. Built with Vanilla JS.</p>
+            <p class="api-attribution">Powered by the iTunes Search API.</p>
         </footer>
-    </div>
-</body>
-</html>
+    </div>class=""
 
+    <!-- Audio progress bar (fixed bottom) -->
+    <div class="now-playing-bar" id="now-playing-bar" hidden>
+        <div class="np-info">
+            <img id="np-artwork" src="" alt="Album art" class="np-artwork">
+            <div class="np-text">
+                <span id="np-title" class="np-title">—</span>
+                <span id="np-artist" class="np-artist">—</span>
+            </div>
+        </div>
+        <div class="np-progress-wrap">
+            <div class="np-progress-bar"><div class="np-progress-fill" id="np-fill"></div></div>
+        </div>
+        <button class="np-stop-btn" id="np-stop-btn" aria-label="Stop playback">✕</button>
+    </div>
+
+    <!-- THE FIX: script tag was missing in the original -->
+    <script src="script.js"></script>
+</body>
+    </html>
