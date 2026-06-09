@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AuraVibe // Premium Mood Playlist Generator</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="glow-bg">
+        <div class="glow-sphere glow-1"></div>
+        <div class="glow-sphere glow-2"></div>
+    </div>
+
+    <div class="app-container">
+        <header class="hero-section">
+            <div class="logo-container">
+                <span class="logo-icon">⚡</span>
+                <h1 class="app-title">Aura<span>Vibe</span></h1>
+            </div>
+            <p class="app-subtitle">Alchemize your current mood into a perfectly curated audio experience.</p>
+        </header>
+
+        <main class="main-content">
+            <section class="control-panel glass-card" aria-labelledby="search-heading">
+                <h2 id="search-heading" class="visually-hidden">Mood Selector</h2>
+                
+                <form id="mood-form" novalidate>
+                    <div class="input-group">
+                        <label for="mood-input" class="input-label">How are you feeling right now?</label>
+                        <div class="input-wrapper">
+                            <input 
+                                type="text" 
+                                id="mood-input" 
+                                placeholder="e.g., Happy, Focused, Relaxed, Melancholic..." 
+                                autocomplete="off"
+                                required
+                                aria-required="true"
+                            >
+                            <button type="submit" id="generate-btn" class="btn btn-primary">
+                                <span>Generate Playlist</span>
+                                <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                            </button>
+                        </div>
+                        <div id="input-error" class="error-message" aria-live="polite"></div>
+                    </div>
+                </form>
+
+                <div class="recent-searches-container" id="recent-searches-box" hidden>
+                    <span class="recent-label">Recent Moods:</span>
+                    <div class="recent-tags" id="recent-tags-list">
+                        </div>
+                </div>
+            </section>
+
+            <section class="results-section" aria-live="polite" id="results-container">
+                
+                <div class="empty-state glass-card" id="state-empty">
+                    <div class="empty-illustration">
+                        <div class="waves">
+                            <div class="wave wave-1"></div>
+                            <div class="wave wave-2"></div>
+                            <div class="wave wave-3"></div>
+                        </div>
+                    </div>
+                    <h3>Your vibe is waiting</h3>
+                    <p>Enter a mood or keywords above to synthesize a personalized soundtrack matching your aura.</p>
+                </div>
+
+                <div class="skeleton-state" id="state-loading" hidden>
+                    <div class="playlist-header-skeleton">
+                        <div class="skeleton skeleton-title"></div>
+                        <div class="skeleton skeleton-subtitle"></div>
+                    </div>
+                    <div class="grid-layout">
+                        <div class="song-card-skeleton glass-card">
+                            <div class="skeleton skeleton-img"></div>
+                            <div class="skeleton skeleton-text short"></div>
+                            <div class="skeleton skeleton-text long"></div>
+                        </div>
+                        <div class="song-card-skeleton glass-card">
+                            <div class="skeleton skeleton-img"></div>
+                            <div class="skeleton skeleton-text short"></div>
+                            <div class="skeleton skeleton-text long"></div>
+                        </div>
+                        <div class="song-card-skeleton glass-card">
+                            <div class="skeleton skeleton-img"></div>
+                            <div class="skeleton skeleton-text short"></div>
+                            <div class="skeleton skeleton-text long"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="error-state glass-card" id="state-error" hidden>
+                    <div class="error-icon">⚠️</div>
+                    <h3>Failed to Sync Vibe</h3>
+                    <p id="error-text-content">An unexpected error occurred. Please verify your connection and try again.</p>
+                    <button class="btn btn-secondary" id="retry-btn">Try Again</button>
+                </div>
+
+                <div class="playlist-results" id="state-results" hidden>
+                    <div class="playlist-meta">
+                        <div>
+                            <h2 class="playlist-title" id="playlist-vibe-title">Your Focused Soundtrack</h2>
+                            <p class="playlist-count" id="playlist-vibe-count">Loaded 10 curated tracks</p>
+                        </div>
+                    </div>
+                    <div class="grid-layout" id="songs-grid">
+                        </div>
+                </div>
+
+            </section>
+        </main>
+
+        <footer class="app-footer">
+            <p>&copy; 2026 AuraVibe. Engineered with Vanilla JS & Semantic UX.</p>
+            <p class="api-attribution">Powered by the open iTunes Discovery Engine.</p>
+        </footer>
+    </div>
+</body>
+</html>
+
